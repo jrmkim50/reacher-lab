@@ -1,3 +1,4 @@
+from ntpath import join
 from reacher import reacher_kinematics
 import pybullet as p
 import reacher.data as pd
@@ -15,8 +16,8 @@ flags.DEFINE_bool("run_on_robot", False, "Whether to run on robot or in simulati
 FLAGS = flags.FLAGS
 import pybullet_data
 
-KP = 8.0 # A/rad (1/1000x relative to lab 1/2)
-KD = 0.8 # A/(rad/s) (1/1000x relative to lab 1/2)
+KP = 6.0 # A/rad (1/1000x relative to lab 1/2)
+KD = 2.0 # A/(rad/s) (1/1000x relative to lab 1/2)
 MAX_CURRENT = 6.0 # A (not mA as in lab 1/2)
 
 HIP_OFFSET = 0.0335
@@ -78,12 +79,19 @@ def main(argv):
       c = param_ids[i]
       target_pos = p.readUserDebugParameter(c)
       joint_angles[i] = target_pos
+      # target_pos = joint_angles[i]
       p.setJointMotorControl2(reacher, joint_ids[i], p.POSITION_CONTROL, target_pos, force=20.)
+
+    end_effector_pos = reacher_kinematics.calculate_forward_kinematics_robot(joint_angles)
 
     # Command actual robot
     if run_on_robot:
       full_actions = np.zeros([3, 4])
       full_actions[:, 3] = np.reshape(joint_angles, 3)
+      end_effector_pos_right = [i for i in end_effector_pos]
+      end_effector_pos_right[1] -= 0.160
+      joint_angles_ik = reacher_kinematics.calculate_inverse_kinematics(end_effector_pos_right, np.array([0.001, 0.001, 0.001]))
+      full_actions[:, 2] = np.reshape(joint_angles_ik, 3)
       hardware_interface.set_actuator_postions(np.array(full_actions))
     
     # Use forward kinematics to set the position of the sphere to the
@@ -91,7 +99,6 @@ def main(argv):
     # If it's working, the sphere should overlap with the 
     # actual robot end-effector. There may be some lag due to the 
     # inertia of the robot arm.
-    end_effector_pos = reacher_kinematics.calculate_forward_kinematics_robot(joint_angles)
     p.resetBasePositionAndOrientation(sphere_id, posObj=end_effector_pos, ornObj=[0, 0, 0, 1])
     time.sleep(0.01)
 
